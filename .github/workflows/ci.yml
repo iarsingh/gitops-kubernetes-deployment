@@ -1,0 +1,82 @@
+name: ci
+
+# Continuous integration for the sample-api workload and the GitOps manifests.
+#   * lint + unit-test the Python app
+#   * validate every Kustomize overlay renders
+#   * build and push the container image to GHCR on push to main
+# The image tag pushed here (dev-<sha> / a semver on tag) is what promote.yml then
+# rolls through the environments.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/iarsingh/sample-api
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r app/requirements-dev.txt
+      - name: Run unit tests
+        run: pytest
+
+  validate-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize + kubeconform
+        run: |
+          curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          curl -sSL "https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz" | tar xz
+          sudo mv kubeconform /usr/local/bin/
+      - name: Build + schema-validate every overlay
+        run: |
+          set -euo pipefail
+          for target in base overlays/dev overlays/staging overlays/production; do
+            echo "== applications/sample-api/${target} =="
+            kustomize build "applications/sample-api/${target}" \
+              | kubeconform -strict -ignore-missing-schemas -summary
+          done
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: [test, validate-manifests]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}
