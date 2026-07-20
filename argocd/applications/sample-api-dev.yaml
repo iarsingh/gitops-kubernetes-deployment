@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-api-dev
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+    app.kubernetes.io/environment: dev
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: sample-api-nonprod
+  source:
+    repoURL: https://github.com/iarsingh/gitops-kubernetes-deployment.git
+    targetRevision: main
+    path: applications/sample-api/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sample-api-dev
+  # Dev is the fast lane: fully automated sync with self-healing and pruning.
+  # A merged image-tag bump is reconciled into the cluster with no human gate,
+  # and any manual drift is reverted automatically (selfHeal).
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10

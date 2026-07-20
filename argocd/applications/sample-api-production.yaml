@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-api-production
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+    app.kubernetes.io/environment: production
+  annotations:
+    sample-api.gitops/promotion-gate: "manual-sync + blue-green-manual-promotion"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: sample-api-prod
+  source:
+    repoURL: https://github.com/iarsingh/gitops-kubernetes-deployment.git
+    targetRevision: main
+    path: applications/sample-api/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sample-api-production
+  # Production has NO automated sync policy. Argo CD will detect drift and mark
+  # the app OutOfSync, but an operator must run `argocd app sync
+  # sample-api-production` (or click Sync) to apply. The prod project's deny sync
+  # window enforces this even if an automated policy were added by mistake.
+  # After sync, the blue-green Rollout still requires a manual promotion
+  # (autoPromotionEnabled: false) to shift live traffic.
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+  # Prune is intentionally NOT automated; pruning in production is a manual,
+  # reviewed action.
+  revisionHistoryLimit: 10

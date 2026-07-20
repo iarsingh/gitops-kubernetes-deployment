@@ -1,0 +1,49 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pdb
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+  annotations:
+    policies.kyverno.io/title: Require a PodDisruptionBudget for Every Deployment
+    policies.kyverno.io/category: Availability
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Any Deployment with more than one replica must be accompanied by a
+      PodDisruptionBudget in the same namespace, so voluntary disruptions (node
+      drains, upgrades) cannot take the whole workload down at once. The
+      sample-api base ships a PDB precisely to satisfy this.
+spec:
+  # Audit rather than Enforce: this rule reads other objects via an API call, and
+  # blocking on eventual-consistency lookups at admission time is risky. It still
+  # reports every non-compliant Deployment.
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: deployment-has-pdb
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+      # Only require a PDB when the Deployment runs more than one replica.
+      preconditions:
+        all:
+          - key: "{{ request.object.spec.replicas || `1` }}"
+            operator: GreaterThan
+            value: 1
+      context:
+        - name: pdbcount
+          apiCall:
+            urlPath: "/apis/policy/v1/namespaces/{{ request.namespace }}/poddisruptionbudgets"
+            jmesPath: "items | length(@)"
+      validate:
+        message: >-
+          A PodDisruptionBudget is required in namespace '{{ request.namespace }}'
+          for multi-replica Deployment '{{ request.object.metadata.name }}'.
+        deny:
+          conditions:
+            all:
+              - key: "{{ pdbcount }}"
+                operator: Equals
+                value: 0

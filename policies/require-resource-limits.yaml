@@ -1,0 +1,36 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+  annotations:
+    policies.kyverno.io/title: Require CPU/Memory Requests and Limits
+    policies.kyverno.io/category: Resource Management
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Every container must declare CPU and memory requests and limits. Without
+      limits a single workload can starve a node; this is exactly what the
+      sample-api base Deployment demonstrates.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-resources
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "CPU and memory requests and limits are required on every container."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    memory: "?*"
+                    cpu: "?*"
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"

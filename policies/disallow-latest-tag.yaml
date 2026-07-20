@@ -1,0 +1,42 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+  annotations:
+    policies.kyverno.io/title: Disallow Mutable :latest Image Tags
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Images must be pinned to an immutable tag. GitOps promotion works by
+      bumping an explicit tag in a Kustomize overlay; a mutable :latest tag would
+      make the git state a lie and break auditability and rollback.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "An explicit image tag is required (e.g. image:1.2.3)."
+        pattern:
+          spec:
+            containers:
+              - image: "*:*"
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Using a mutable ':latest' tag is not allowed; pin an immutable tag."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"

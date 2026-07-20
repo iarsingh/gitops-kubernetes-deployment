@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sample-api-root
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # App-of-apps root. This single Application renders the three child
+  # Application manifests (dev/staging/production) from this directory, so
+  # bootstrapping the whole stack is one `kubectl apply -f root-app.yaml`.
+  project: default
+  source:
+    repoURL: https://github.com/iarsingh/gitops-kubernetes-deployment.git
+    targetRevision: main
+    path: argocd/applications
+    directory:
+      recurse: false
+      # Include only the child Application manifests; exclude this root file so
+      # the root does not try to manage itself.
+      include: "sample-api-{dev,staging,production}.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # The root app itself is safe to auto-sync: it only creates/updates the child
+  # Application objects. Each child then applies its own sync policy (dev/staging
+  # automated, production manual).
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+  revisionHistoryLimit: 10

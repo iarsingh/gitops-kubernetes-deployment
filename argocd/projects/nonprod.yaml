@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sample-api-nonprod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+  # Keep the project around even if the app-of-apps root is deleted.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: >-
+    Non-production project for sample-api (dev + staging). Least-privilege: apps
+    in this project may only deploy this repo into the dev/staging namespaces of
+    the in-cluster destination.
+  # Only this repository may be a source. No other repos can be synced.
+  sourceRepos:
+    - https://github.com/iarsingh/gitops-kubernetes-deployment.git
+  # Whitelisted destinations: only the dev and staging namespaces, in-cluster.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: sample-api-dev
+    - server: https://kubernetes.default.svc
+      namespace: sample-api-staging
+  # Namespaced resources this project is allowed to manage.
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: ""
+      kind: ConfigMap
+    - group: apps
+      kind: Deployment
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: argoproj.io
+      kind: Rollout
+    - group: argoproj.io
+      kind: AnalysisTemplate
+    - group: argoproj.io
+      kind: AnalysisRun
+  # No cluster-scoped resources may be created by non-prod apps.
+  clusterResourceWhitelist: []
+  # Sync windows encode the staging "manual promote gate": automated sync only
+  # runs during business hours; outside the window a human must promote manually
+  # (manualSync: true keeps manual syncs allowed at any time).
+  syncWindows:
+    - kind: allow
+      schedule: "0 9 * * 1-5"
+      duration: 9h
+      applications:
+        - sample-api-staging
+      manualSync: true
+      timeZone: UTC
+  # Surface, but do not auto-delete, resources that exist in the namespace but
+  # not in git.
+  orphanedResources:
+    warn: true

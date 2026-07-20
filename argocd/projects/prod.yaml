@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sample-api-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: gitops-kubernetes-deployment
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: >-
+    Production project for sample-api. Strictest scope: this repo only, the
+    production namespace only, and automated sync is denied by a deny sync window
+    so every production change requires an explicit manual sync/promotion.
+  sourceRepos:
+    - https://github.com/iarsingh/gitops-kubernetes-deployment.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: sample-api-production
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: ""
+      kind: ConfigMap
+    - group: apps
+      kind: Deployment
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: argoproj.io
+      kind: Rollout
+    - group: argoproj.io
+      kind: AnalysisTemplate
+    - group: argoproj.io
+      kind: AnalysisRun
+  clusterResourceWhitelist: []
+  # A permanent deny window blocks *automated* sync for production while still
+  # allowing a human to trigger a manual sync (manualSync: true). This is the
+  # belt-and-suspenders companion to the production Application having no
+  # automated sync policy at all.
+  syncWindows:
+    - kind: deny
+      schedule: "* * * * *"
+      duration: 24h
+      applications:
+        - sample-api-production
+      manualSync: true
+      timeZone: UTC
+  orphanedResources:
+    warn: true
