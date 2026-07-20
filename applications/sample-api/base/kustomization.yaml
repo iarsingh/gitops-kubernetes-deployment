@@ -13,15 +13,15 @@ resources:
   - poddisruptionbudget.yaml
   - networkpolicy.yaml
 
-# Labels applied to every object AND to selectors so the Service/PDB/HPA all
-# consistently target the workload. Only app.kubernetes.io/name is promoted into
-# selectors (keeping them minimal and immutable-safe); the rest are metadata only.
+# Common metadata labels applied to every object (and to pod templates), but NOT
+# to selectors. Every manifest declares its own selector explicitly, so this
+# transformer cannot leak the app label into NetworkPolicy peer selectors (e.g.
+# the kube-dns egress rule) or bloat the immutable workload selectors.
 labels:
-  - includeSelectors: true
+  - includeSelectors: false
+    includeTemplates: true
     pairs:
       app.kubernetes.io/name: sample-api
-  - includeSelectors: false
-    pairs:
       app.kubernetes.io/part-of: gitops-kubernetes-deployment
       app.kubernetes.io/managed-by: argocd
 
