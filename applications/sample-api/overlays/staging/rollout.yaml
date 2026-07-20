@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: sample-api
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: api
+spec:
+  # Rather than duplicate the pod template, this Rollout adopts the base
+  # Deployment's template via workloadRef. Argo Rollouts scales the Deployment to
+  # zero (scaleDown: onsuccess) after the first successful rollout and manages the
+  # ReplicaSets itself. The Deployment is patched to replicas: 0 in git as well so
+  # the desired state is unambiguous.
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sample-api
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sample-api
+    scaleDown: onsuccess
+  strategy:
+    canary:
+      # Progressive, replica-weighted canary. Between weight increases the
+      # rollout pauses for analysis; if the AnalysisTemplate fails, the rollout
+      # aborts and traffic returns to the stable ReplicaSet automatically.
+      steps:
+        - setWeight: 20
+        - pause:
+            duration: 60s
+        - analysis:
+            templates:
+              - templateName: sample-api-success-rate
+        - setWeight: 50
+        - pause:
+            duration: 120s
+        - analysis:
+            templates:
+              - templateName: sample-api-success-rate
+        - setWeight: 80
+        - pause:
+            duration: 60s
+        # Final step promotes to 100% automatically once analysis has passed.

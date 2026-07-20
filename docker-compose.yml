@@ -1,0 +1,28 @@
+# Local iteration without Kubernetes.
+#
+#   docker compose up --build      # build and run the sample-api on :8000
+#   curl localhost:8000/health     # -> {"status":"ok"}
+#   curl localhost:8000/ready      # -> {"ready":true,...}
+#   curl "localhost:8000/api/v1/echo?message=hi"
+#
+# This exists so a developer can validate the application itself before ever
+# touching Kustomize, Argo CD, or a cluster.
+services:
+  sample-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sample-api:local
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local
+      APP_VERSION: 0.1.0
+      READINESS_WARMUP_SECONDS: "0"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped

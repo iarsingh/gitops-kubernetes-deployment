@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-api
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: api
+spec:
+  # Base replica count. Every overlay patches this to an environment-appropriate
+  # value (dev scales down, production scales up). In staging/production the
+  # Argo Rollouts Rollout takes ownership of the pods via workloadRef and this
+  # Deployment is scaled to zero.
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sample-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sample-api
+        app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: sample-api
+      automountServiceAccountToken: false
+      # Pod-level security context: run as an unprivileged user, drop into a
+      # read-only world, and use the RuntimeDefault seccomp profile.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sample-api
+          # The tag is a placeholder overwritten per environment by
+          # `kustomize edit set image` in the promotion workflow. It is never
+          # :latest — policy (see /policies) rejects mutable tags.
+          image: ghcr.io/iarsingh/sample-api:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sample-api-config
+          # Container-level hardening: no privilege escalation, drop all
+          # capabilities, read-only root filesystem.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 3
+            failureThreshold: 10
+          # readOnlyRootFilesystem is enabled above; give the process a writable
+          # tmpfs for anything that needs scratch space.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

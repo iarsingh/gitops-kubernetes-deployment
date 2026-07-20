@@ -1,0 +1,12 @@
+[project]
+name = "sample-api"
+version = "0.1.0"
+description = "Minimal FastAPI workload deployed via GitOps (Argo CD + Argo Rollouts)."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+# Make the repo root importable so `from app.main import app` resolves when
+# running `pytest` from the repository root.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production overlay.
+#
+# Production is deliberately conservative:
+#   * Argo CD sync is MANUAL only (no automated sync) — see argocd/applications.
+#   * Argo Rollouts runs a BLUE-GREEN strategy with autoPromotionEnabled: false,
+#     so cutover to the active Service requires an explicit human promotion.
+#   * A stricter PDB (minAvailable: 2), higher replica floor, and firmer resource
+#     limits reflect a production reliability posture.
+
+namespace: sample-api-production
+
+resources:
+  - ../../base
+  - analysistemplate.yaml
+  - preview-service.yaml
+  - rollout.yaml
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/environment: production
+
+configMapGenerator:
+  - name: sample-api-config
+    behavior: merge
+    literals:
+      - APP_ENV=production
+      - READINESS_WARMUP_SECONDS=10
+
+images:
+  - name: ghcr.io/iarsingh/sample-api
+    newTag: "0.1.0"
+
+patches:
+  # The blue-green Rollout owns the pods; scale the Deployment to 0.
+  - target:
+      kind: Deployment
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  # Firmer production resource requests/limits for predictable scheduling and
+  # tighter blast radius.
+  - target:
+      kind: Deployment
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "1"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+  # Point the HPA at the Rollout with a higher production floor/ceiling.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/scaleTargetRef/apiVersion
+        value: argoproj.io/v1alpha1
+      - op: replace
+        path: /spec/scaleTargetRef/kind
+        value: Rollout
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
+  # Stricter production PDB: keep at least two pods available at all times.
+  - target:
+      kind: PodDisruptionBudget
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2

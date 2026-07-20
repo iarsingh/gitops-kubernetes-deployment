@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: sample-api-success-rate
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: analysis
+spec:
+  # Production reuses the success-rate check but with a stricter threshold: the
+  # green stack must sustain >= 99% success across the pre-promotion window
+  # before an operator is allowed to promote it to the active Service.
+  args:
+    - name: service-name
+      value: sample-api
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 6
+      successCondition: result[0] >= 0.99
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            1
+            -
+            sum(rate(sample_api_request_errors_total[2m]))
+            /
+            clamp_min(sum(rate(sample_api_requests_total[2m])), 1)

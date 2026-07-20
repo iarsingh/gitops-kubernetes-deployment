@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: sample-api
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: api
+spec:
+  # Production uses a blue-green strategy. A full green stack is brought up behind
+  # the preview Service; the active Service only cuts over on an explicit manual
+  # promotion (autoPromotionEnabled: false). This gives an operator a clean,
+  # instant switch and an instant rollback.
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sample-api
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sample-api
+    scaleDown: onsuccess
+  strategy:
+    blueGreen:
+      activeService: sample-api
+      previewService: sample-api-preview
+      # Require a human (or a gated pipeline step) to promote. Nothing shifts to
+      # the active Service automatically.
+      autoPromotionEnabled: false
+      # Run analysis against the preview stack before it is eligible for promotion.
+      prePromotionAnalysis:
+        templates:
+          - templateName: sample-api-success-rate
+      # After promotion, keep the previous (blue) ReplicaSet around for a window
+      # so an instant rollback (undo) is possible without a rebuild.
+      scaleDownDelaySeconds: 300
+      # How long the preview must remain healthy before promotion is permitted.
+      previewReplicaCount: 3

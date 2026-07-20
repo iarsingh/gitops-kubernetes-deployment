@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-api-preview
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: api-preview
+spec:
+  # The blue-green preview Service. Argo Rollouts points this at the new (green)
+  # ReplicaSet so it can be smoke-tested internally before the active Service is
+  # cut over. Argo Rollouts injects the rollouts-pod-template-hash into the
+  # selector at runtime.
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sample-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

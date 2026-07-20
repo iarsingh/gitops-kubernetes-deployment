@@ -1,0 +1,59 @@
+# Two policies implementing a default-deny posture with explicit allow rules.
+# 1) default-deny-all closes off every ingress and egress path in the namespace.
+# 2) sample-api-allow re-opens only what the workload genuinely needs.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: network-policy
+spec:
+  # An empty podSelector selects every pod in the namespace. With both policy
+  # types listed and no rules, all ingress and egress is denied by default.
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sample-api-allow
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sample-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow HTTP to the app port from the ingress-controller namespace and from
+    # pods in this namespace (e.g. Prometheus scraping /metrics).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow DNS resolution so the pod can look up service names.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

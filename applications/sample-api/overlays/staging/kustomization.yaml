@@ -1,0 +1,68 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Staging overlay.
+#
+# Staging validates a release candidate with a real progressive-delivery
+# strategy: an Argo Rollouts *canary*. Traffic shifts to the new version in
+# weighted steps with an automated analysis gate (success rate from Prometheus)
+# between steps. Argo CD auto-syncs staging, but promotion of the canary to 100%
+# is gated by analysis rather than a blind rollout.
+
+namespace: sample-api-staging
+
+resources:
+  - ../../base
+  - analysistemplate.yaml
+  - rollout.yaml
+
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/environment: staging
+
+configMapGenerator:
+  - name: sample-api-config
+    behavior: merge
+    literals:
+      - APP_ENV=staging
+      - READINESS_WARMUP_SECONDS=5
+
+images:
+  - name: ghcr.io/iarsingh/sample-api
+    newTag: "0.1.0"
+
+patches:
+  # The Rollout (via workloadRef) now owns the pods, so scale the Deployment to 0.
+  - target:
+      kind: Deployment
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  # Point the HPA at the Rollout instead of the Deployment.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/scaleTargetRef/apiVersion
+        value: argoproj.io/v1alpha1
+      - op: replace
+        path: /spec/scaleTargetRef/kind
+        value: Rollout
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 4
+  # Staging keeps at least one pod available during disruptions.
+  - target:
+      kind: PodDisruptionBudget
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 1

@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Development overlay.
+#
+# Dev is the "fast lane": Argo CD auto-syncs this overlay (selfHeal + prune), so a
+# merged image-tag bump lands in the cluster automatically with no manual gate.
+# There is no progressive-delivery Rollout here — a plain RollingUpdate keeps
+# iteration fast and cheap. Replicas are scaled down to conserve resources.
+
+namespace: sample-api-dev
+
+resources:
+  - ../../base
+
+# Environment label applied to every object (metadata only, not selectors).
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/environment: dev
+
+# Override the injected environment configuration.
+configMapGenerator:
+  - name: sample-api-config
+    behavior: merge
+    literals:
+      - APP_ENV=dev
+      - READINESS_WARMUP_SECONDS=0
+
+# Dev tracks a moving, per-commit tag. The promotion workflow writes the newest
+# dev build tag here directly on merge to main (mirroring "automatic sync in dev").
+images:
+  - name: ghcr.io/iarsingh/sample-api
+    newTag: dev-3f2a1c9
+
+patches:
+  # Scale down for cost in a non-production environment.
+  - target:
+      kind: Deployment
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  # A looser PDB is fine in dev; allow a single-pod deployment to be disrupted.
+  - target:
+      kind: PodDisruptionBudget
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+  # Dev autoscaling floor of 1.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: sample-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2

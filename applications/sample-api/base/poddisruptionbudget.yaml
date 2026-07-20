@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sample-api
+  labels:
+    app.kubernetes.io/name: sample-api
+    app.kubernetes.io/component: api
+spec:
+  # Keep at least one pod serving during voluntary disruptions (node drains,
+  # cluster upgrades). Production tightens this to a higher minAvailable.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sample-api
