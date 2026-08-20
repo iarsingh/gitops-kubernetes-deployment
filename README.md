@@ -1,5 +1,9 @@
 # GitOps Kubernetes Deployment with Argo CD
 
+<!-- repository-summary -->
+A GitOps delivery reference using Argo CD, Kustomize, Argo Rollouts, policy guardrails, and environment promotion.
+<!-- /repository-summary -->
+
 A reference implementation of **GitOps-based continuous delivery** for a Kubernetes
 microservice, using Argo CD, Kustomize, and Argo Rollouts. It deploys a real (small)
 FastAPI service through **dev → staging → production** with PR-based environment
