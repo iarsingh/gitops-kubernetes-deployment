@@ -1,5 +1,45 @@
 # GitOps Kubernetes Deployment with Argo CD
 
+<!-- project-guide:start -->
+## Project guide
+
+[Project architecture](PROJECT_ARCHITECTURE.md) · [Interview questions and answers](INTERVIEW_QA.md)
+
+Use the architecture document for the component diagram, implementation boundaries, and verification entry points. The interview guide includes source-backed answers and project walkthroughs.
+
+### Implementation map
+
+| Component | Responsibility |
+| --- | --- |
+| [`app/main.py`](app/main.py) | HTTP handlers: `GET /`, `GET /health`, `GET /ready`, `GET /api/v1/echo`, `GET /metrics` |
+| [`app/requirements.txt`](app/requirements.txt) | Implementation or supporting configuration |
+| [`app/__init__.py`](app/__init__.py) | Implementation or supporting configuration |
+| [`scripts/drift-check.sh`](scripts/drift-check.sh) | Implementation or supporting configuration |
+| [`scripts/promote-image.sh`](scripts/promote-image.sh) | Implementation or supporting configuration |
+| [`scripts/rollback.sh`](scripts/rollback.sh) | Implementation or supporting configuration |
+| [`Dockerfile`](Dockerfile) | Container build/service configuration |
+| [`Makefile`](Makefile) | Implementation or supporting configuration |
+| [`docker-compose.yml`](docker-compose.yml) | Container build/service configuration |
+| [`pyproject.toml`](pyproject.toml) | Implementation or supporting configuration |
+| [`tests/test_main.py`](tests/test_main.py) | Executable checks and regression examples |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | GitHub Actions job definitions |
+| [`.github/workflows/promote.yml`](.github/workflows/promote.yml) | GitHub Actions job definitions |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Project explanations or operating notes |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Project explanations or operating notes |
+| [`README.md`](README.md) | Project explanations or operating notes |
+
+### Local setup and verification
+
+From the repository root (the commands follow the checked-in manifests):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r app/requirements.txt
+```
+
+<!-- project-guide:end -->
+
 <!-- repository-summary -->
 A GitOps delivery reference using Argo CD, Kustomize, Argo Rollouts, policy guardrails, and environment promotion.
 <!-- /repository-summary -->
